@@ -12,8 +12,7 @@
 
 #define MAXFILESIZE 1024
 
-#define REGULAR 1
-#define SPECIAL 2       //Future enhancement
+#define REGULAR 1              //#define SPECIAL 2       //Future enhancement
 
 // for Lseek system call
 #define START 0     
@@ -36,7 +35,7 @@ typedef struct inode        //inode does't have file name // every file system h
     char *Buffer;       //  points to Data block
     int LinkCount;      //  when we create shortcut LinkCount gets increase 
     int ReferenceeCount;    // how many references are refering to the file  
-    int permission;         // 1     2      3   when we create the file
+    int permission;        
     struct inode *next;
 }INODE,*PINODE,**PPINODE;
 
@@ -70,12 +69,13 @@ void man(char *name)
     else if(strcmp(name,"read") == 0)
     {
         printf("Description : Used to read data from regular file\n");
-        printf("Usage : read File_name No_Of_Bytes_To_Read\n"); 
+        printf("Usage : read File_name No_Of_Bytes_To_Read\n");
+        printf("No_Of_Bytes_To_Read is optional\n"); 
     }    
     else if(strcmp(name,"write") == 0)
     {
         printf("Description : Used to write into regular file\n");
-        printf("Usage : write File_name\n After this enter the data that we wnt to write\n");
+        printf("Usage : write File_name\n After this enter the data that we want to write\n");
     }
     else if(strcmp(name,"ls") == 0)
     {
@@ -134,6 +134,7 @@ void DisplayHelp()
     printf("clear : To claer consol\n");
     printf("open : To open the file\n");
     printf("close : To close file\n");
+    printf("create : To create new file\n");
     printf("closeall : To close all opened files\n");
     printf("read : To Read the contents from file\n");
     printf("write : To write contents into files\n");
@@ -141,7 +142,7 @@ void DisplayHelp()
     printf("stat: To Display information of file using name\n");
     printf("fstat : To Dislay information of file using file descriptor \n");
     printf("truncate : To Remove all data from file\n");
-    printf("rm : To Delet the file\n");
+    printf("rm : To Delete the file\n");
 }
 
 int GetFdFromName(char *name)
@@ -209,7 +210,7 @@ void CreateDILB()
         }
         i++;
     }
-    printf("DILB created successfully\n\n");
+    printf("DILB created successfully\n");
 }
 
 void InitialiseSuperBlock()
@@ -223,6 +224,7 @@ void InitialiseSuperBlock()
 
     SUPERBLOCKobj.TotalInodes = MAXINODE;
     SUPERBLOCKobj.FreeInodes = MAXINODE;
+    printf("Super BLock Initialised\n");
 }
 
 int CreateFile(char *name,int permission)
@@ -296,7 +298,29 @@ int rm_File(char *name)
 
     UFDTArr[fd].ptrfiletable = NULL;
     (SUPERBLOCKobj.FreeInodes)++;
+    
+    return 0;
 }
+
+int ReadFile(int fd , char *arr)
+{
+                
+    if(UFDTArr[fd].ptrfiletable == NULL)    return -1;
+
+    if(UFDTArr[fd].ptrfiletable->mode != READ && UFDTArr[fd].ptrfiletable -> mode != READ + WRITE)    return -2;
+    
+    if(UFDTArr[fd].ptrfiletable->ptrinode->permission != READ && UFDTArr[fd].ptrfiletable->ptrinode->permission != READ+WRITE)      return -2;
+    
+    //if(UFDTArr[fd].ptrfiletable->readoffset == UFDTArr[fd].ptrfiletable->ptrinode->FileActualSize)      return -3;
+
+    if(UFDTArr[fd].ptrfiletable->ptrinode->FileType != REGULAR)     return -4;
+    
+    strncpy(arr , UFDTArr[fd].ptrfiletable->ptrinode->Buffer , UFDTArr[fd].ptrfiletable->ptrinode->FileActualSize); 
+    
+                
+    return (UFDTArr[fd].ptrfiletable->ptrinode->FileActualSize);
+}
+
 
 int ReadFile(int fd ,char *arr, int isize)
 {
@@ -313,6 +337,9 @@ int ReadFile(int fd ,char *arr, int isize)
     if(UFDTArr[fd].ptrfiletable->ptrinode->FileType != REGULAR)     return -4;
 
     read_size = (UFDTArr[fd].ptrfiletable->ptrinode->FileActualSize) - (UFDTArr[fd].ptrfiletable->readoffset);
+
+    printf("%d",read_size);
+
     if(read_size < isize)
     {
         strncpy(arr,(UFDTArr[fd].ptrfiletable->ptrinode->Buffer) + (UFDTArr[fd].ptrfiletable->readoffset),read_size);
@@ -356,7 +383,7 @@ int WriteFile(int fd , char *arr , int isize)
 
 int OpenFile(char *name , int mode)
 {
-    int i =0;
+    int i =0, j = 0;
     PINODE temp = NULL;
 
     if(name == NULL || mode <= 0)
@@ -375,6 +402,13 @@ int OpenFile(char *name , int mode)
             break;
         i++;
     }
+        while(i < MAXINODE)
+    {
+        if(UFDTArr[i].ptrfiletable == NULL)
+            break;
+        i++;
+    }
+    j = temp->InodeNumber;
 
     UFDTArr[i].ptrfiletable = (PFILETABLE)malloc(sizeof(FILETABLE));
     if(UFDTArr[i].ptrfiletable == NULL)     return -1;
@@ -487,6 +521,8 @@ int LseekFile(int fd ,int size,int from)
                 (UFDTArr[fd].ptrfiletable->writeoffset) = (UFDTArr[fd].ptrfiletable->ptrinode->FileActualSize) + size;
         }
     }
+    
+    return 0;
 }   
 
 void ls_file()
@@ -588,6 +624,8 @@ int truncate_File(char *name)
     UFDTArr[fd].ptrfiletable->readoffset = 0;
     UFDTArr[fd].ptrfiletable->writeoffset = 0;
     UFDTArr[fd].ptrfiletable->ptrinode->FileActualSize = 0;
+
+	return 0;
 }
 
 int main()
@@ -604,11 +642,12 @@ int main()
         fflush(stdin);
         strcpy(str,"");
 
-        printf("VFS : >");
+        printf("\nVFS : >");
 
-        fgets(str,80,stdin);    //scanf("%[^'\n']s",str);
+        fgets(str,80,stdin); 
+        //scanf("%[^'\n']s",str);
 
-        count = sscanf(str,"%s %s %s %s",command[0],command[1],command[2],command[2],command[3]);
+        count = sscanf(str,"%s %s %s %s",command[0],command[1],command[2],command[3]);
         // strtok
         if(count == 1)
         {
@@ -634,7 +673,8 @@ int main()
             }
             else if(strcmp(command[0],"exit") == 0)
             {
-                printf("Terminationg the Vinay's Virtual File System\n");
+                printf("----Terminationg the Customized Virtual File System----\n");
+                printf("-------------------Application Closed-------------------\n");
                 break;
             }
             else
@@ -689,7 +729,7 @@ int main()
                     printf("ERROR : Incorrect parameter\n");
                     continue;
                 }
-                printf("Enter the data : \n");
+                printf("Enter the data : ");  // \n");
                 scanf("%[^\n]",arr);
 
                 ret = strlen(arr);
@@ -705,6 +745,7 @@ int main()
                     printf("ERROR : There is no sufficient memory to write\n");
                 if(ret == -3)
                     printf("ERROR : It is not regular file\n");
+               	continue;
             }
             else if(strcmp(command[0],"truncate") == 0)
             {
@@ -712,9 +753,41 @@ int main()
                 if(ret == -1)
                     printf("ERROR : Incorrect parameter\n");
             }
+            else if(strcmp(command[0],"read")==0)
+            {
+            	fd = GetFdFromName(command[1]);
+            	
+            	if(fd == -1)
+                {
+                    printf("ERROR : Incorrect parameter\n");
+                    continue;
+                }
+                ptr = (char *)malloc(sizeof(UFDTArr[fd].ptrfiletable->ptrinode->FileActualSize));
+                if(ptr == NULL)
+                {
+                    printf("ERROR : Memory allocation failure\n");
+                    continue;
+                }
+                ret = ReadFile(fd,ptr);
+                if(ret == -1)
+                    printf("ERROR : File not existing\n");
+                if(ret == -2)
+                    printf("ERROR : Permission denied\n");
+                if(ret == -3)
+                    printf("ERROR : Reached at end of file\n");
+                if(ret == -4)
+                    printf("ERROR : It is not regular file\n");
+                if(ret == 0)
+                    printf("ERROR : File empty\n");
+                if(ret > 0)
+                {
+                    write(2,ptr,ret);
+                }
+                continue;
+            }
             else 
             {
-                printf("\nERROR : Command not found !!!\n");
+                printf("\nERROR : Command not found  1!!!\n");
                 continue;
             }
         }
